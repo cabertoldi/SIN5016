@@ -5,6 +5,8 @@ import pandas as pd
 from loguru import logger
 from dagster import op
 
+from src.data.download import PAIRS_DOWNLOADED_FILES
+
 RAW_IMAGES_PATH = "data/raw/lfw"
 PAIRS_WITH_LABELS_PATH = "data/interim/pairs.parquet"
 UNIQUE_IMAGES_PATH = "data/interim/images_paths.parquet"
@@ -67,9 +69,13 @@ def get_unique_images(pairs_df: pd.DataFrame) -> pd.DataFrame:
 
 
 @op
-def genereate_pairs_with_labels_df(pairs_files: List[Tuple[str, int]]) -> pd.DataFrame:
+def genereate_pairs_with_labels_df() -> pd.DataFrame:
+
     pairs_with_labels_df = pd.concat(
-        [read_pairs_file(pair_file, nrows) for pair_file, nrows in pairs_files]
+        [
+            read_pairs_file(pair_file, nrows)
+            for pair_file, nrows in PAIRS_DOWNLOADED_FILES
+        ]
     )
 
     pairs_with_labels_df.to_parquet(PAIRS_WITH_LABELS_PATH)
