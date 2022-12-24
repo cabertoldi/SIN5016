@@ -2,5 +2,7 @@
 *.jpg
 *.csv
 *.txt
+*.json
 __pycache__/
 venv/*
+.ipynb_checkpoints/*
