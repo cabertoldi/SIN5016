@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
+from typing import Tuple, List
 import pandas as pd
 
 from loguru import logger
-
+from dagster import op
 
 RAW_IMAGES_PATH = "data/raw/lfw"
 PAIRS_WITH_LABELS_PATH = "data/interim/pairs.parquet"
@@ -65,22 +66,19 @@ def get_unique_images(pairs_df: pd.DataFrame) -> pd.DataFrame:
     return imgs
 
 
-def main():
-    pairs_files = [
-        ("data/raw/pairsDevTrain.txt", 1100),
-        ("data/raw/pairsDevTest.txt", 500),
-    ]
-
+@op
+def genereate_pairs_with_labels_df(pairs_files: List[Tuple[str, int]]) -> pd.DataFrame:
     pairs_with_labels_df = pd.concat(
         [read_pairs_file(pair_file, nrows) for pair_file, nrows in pairs_files]
     )
 
     pairs_with_labels_df.to_parquet(PAIRS_WITH_LABELS_PATH)
+    return pairs_with_labels_df
 
+
+@op
+def generate_unique_images_dataset(pairs_with_labels_df: pd.DataFrame) -> pd.DataFrame:
     logger.info("Generating images list...")
     imgs_df = get_unique_images(pairs_with_labels_df)
     imgs_df.to_parquet(UNIQUE_IMAGES_PATH)
-
-
-if __name__ == "__main__":
-    main()
+    return imgs_df
