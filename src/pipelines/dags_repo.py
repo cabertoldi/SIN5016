@@ -1,4 +1,4 @@
-from pipelines.lfw_jobs import lfw_download, lfw_preprocessing
+from src.pipelines.lfw_jobs import lfw_download, lfw_preprocessing
 
 from dagster import repository
 

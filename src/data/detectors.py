@@ -25,10 +25,10 @@ def vj_face_detector(image: np.array) -> List:
 
     faces = DETECTOR.detectMultiScale(
         image,
-        scaleFactor=1.05,
-        minNeighbors=5,
-        minSize=VJ_MINSIZE,
-        flags=cv2.CASCADE_SCALE_IMAGE,
+        scaleFactor=1.2,
+        minNeighbors=2,
+        # minSize=VJ_MINSIZE,
+        flags=cv2.CASCADE_DO_CANNY_PRUNING,
     )
 
     faces = [face.tolist() for face in faces]
