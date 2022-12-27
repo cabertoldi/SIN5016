@@ -89,6 +89,8 @@ def get_unique_images(pairs_df: pd.DataFrame):
         "preview": MetadataValue.md(imgs.head(5).to_markdown()),
     }
 
+    imgs.to_parquet(UNIQUE_IMAGES_PATH)
+
     return Output(value=imgs, metadata=metadata)
 
 
