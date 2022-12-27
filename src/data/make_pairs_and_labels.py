@@ -140,6 +140,9 @@ def genereate_pairs_with_labels_df() -> Output:
 
     pairs_with_labels_df.to_parquet(PAIRS_WITH_LABELS_PATH)
 
-    metadata = {"preview": MetadataValue.md(pairs_with_labels_df.head(5).to_markdown())}
+    metadata = {
+        "preview": MetadataValue.md(pairs_with_labels_df.head(5).to_markdown()),
+        "dataframe_shape": str(pairs_with_labels_df.shape),
+    }
 
     return Output(value=pairs_with_labels_df, metadata=metadata)

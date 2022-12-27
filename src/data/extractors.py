@@ -5,7 +5,7 @@ from typing import List
 import pandas as pd
 import numpy as np
 
-from dagster import asset, AssetIn
+from dagster import asset, Output, MetadataValue
 from PIL import Image
 
 from skimage.feature import hog, local_binary_pattern
@@ -17,6 +17,8 @@ from tqdm import tqdm
 from loguru import logger
 
 
+HOG_FEATURES_PATH = "data/preprocessed/extractors/hog_features.parquet"
+LBP_FEATURES_PATH = "data/preprocessed/extractors/lbp_features.parquet"
 PREPROCESSED_IMAGES_DIR = PREPROCESSED_IMAGE_PATH.format(image_filename="")
 
 
@@ -29,7 +31,7 @@ def get_images_paths() -> List[str]:
 
 
 @asset(non_argument_deps={"cut_faces"})
-def hog_extractor() -> pd.DataFrame:
+def hog_extractor():
     """Itera sobre todas as imagens do repositório de imagens
     preprocessadas e extrai para cada uma delas o seu histograma
     baseado no extrator HOG (Histogram of Oriented Gradients).
@@ -51,12 +53,18 @@ def hog_extractor() -> pd.DataFrame:
     df = pd.DataFrame([[img, hist] for img, hist in zip(images_paths, histograms)])
 
     df.columns = [str(c) for c in df.columns]
-    df.to_parquet("data/preprocessed/extractors/hog_features.parquet")
-    return df
+    df.to_parquet(HOG_FEATURES_PATH)
+
+    metadata = {
+        "total_images": len(df),
+        "preview": MetadataValue.md(df.head(5).to_markdown()),
+    }
+
+    return Output(value=df, metadata=metadata)
 
 
 @asset(non_argument_deps={"cut_faces"})
-def lbp_extractor() -> pd.DataFrame:
+def lbp_extractor():
     """Itera sobre todas as imagens do repositório de imagens
     preprocessadas e extrai para cada uma delas o seu histograma
     baseado no extrator LBP (Local Binary Patterns)"""
@@ -77,5 +85,11 @@ def lbp_extractor() -> pd.DataFrame:
     df = pd.DataFrame([[img, hist] for img, hist in zip(images_paths, histograms)])
 
     df.columns = [str(c) for c in df.columns]
-    df.to_parquet("data/preprocessed/extractors/lbp_features.parquet")
-    return df
+    df.to_parquet(LBP_FEATURES_PATH)
+
+    metadata = {
+        "total_images": len(df),
+        "preview": MetadataValue.md(df.head(5).to_markdown()),
+    }
+
+    return Output(value=df, metadata=metadata)
