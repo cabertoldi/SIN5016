@@ -1,7 +1,7 @@
 *.parquet
 *.jpg
 *.csv
-*.txt
+data/raw/*.txt
 *.json
 __pycache__/
 venv/*
