@@ -11,11 +11,14 @@ from loguru import logger
 from multiprocessing.dummy import Pool
 from dagster import op
 
+from tqdm import tqdm
+
 
 HAAR_CASCADES_PATH = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
-VJ_MINSIZE = (30, 30)
 DETECTED_FACES_JSON = "data/interim/detected_faces.json"
 DETECTOR = cv2.CascadeClassifier(HAAR_CASCADES_PATH)
+SCALE_FACTOR = 1.02
+MIN_NEIGHBORS = 2
 
 
 def vj_face_detector(image: np.array) -> List:
@@ -25,8 +28,8 @@ def vj_face_detector(image: np.array) -> List:
 
     faces = DETECTOR.detectMultiScale(
         image,
-        scaleFactor=1.2,
-        minNeighbors=2,
+        scaleFactor=SCALE_FACTOR,
+        minNeighbors=MIN_NEIGHBORS,
         flags=cv2.CASCADE_DO_CANNY_PRUNING,
     )
 
@@ -54,17 +57,23 @@ def load_and_detect_faces(unique_images_df: pd.DataFrame) -> str:
 
     paths = images_df["img"].values
 
-    with Pool(processes=15) as p:
-        logger.info("Loading images")
-        images = p.map(load_image, paths)
+    logger.info("Loading images")
+    images = [
+        load_image(path)
+        for path in tqdm(paths)
+    ]
+    
+    logger.info("Converting to grayscale")
+    gray_images = [
+        convert2gray(im)
+        for im in tqdm(images)
+    ]
 
-    with Pool(processes=15) as p:
-        logger.info("Converting to grayscale")
-        gray_images = p.map(convert2gray, images)
-
-    with Pool(processes=15) as p:
-        logger.info("Extracting faces")
-        faces = p.map(vj_face_detector, gray_images)
+    logger.info("Extracting faces")
+    faces = [
+        vj_face_detector(gray)
+        for gray in tqdm(gray_images)
+    ]
 
     detected_faces = {path: _faces for path, _faces in zip(paths, faces)}
 
