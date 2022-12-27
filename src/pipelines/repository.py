@@ -8,7 +8,7 @@ from src.pipelines.lfw_jobs import lfw_download
 from dagster import load_assets_from_modules, repository
 
 # TODO: better naming
-detectors_assets = load_assets_from_modules(
+assets = load_assets_from_modules(
     modules=[make_pairs_and_labels, detectors, extractors, merge],
     group_name="lfw_preprocessing",
 )
@@ -16,4 +16,4 @@ detectors_assets = load_assets_from_modules(
 
 @repository
 def repo():
-    return [detectors_assets, lfw_download]
+    return [assets, lfw_download]
