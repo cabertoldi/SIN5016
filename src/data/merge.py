@@ -6,8 +6,6 @@ from src.data.make_pairs_and_labels import PAIRS_WITH_LABELS_PATH
 
 from dagster import asset, Output, AssetIn, MetadataValue
 
-PAIRS_DF = pd.read_parquet(PAIRS_WITH_LABELS_PATH)
-
 
 def merge_features(
     pairs_df: pd.DataFrame, features_df: pd.DataFrame, extractor: str
@@ -65,7 +63,8 @@ def merge_hog_features_with_pairs_dataset(hog_features):
     """Monta conjunto de dados tabular final com as características
     HOG extraídas e a variável alvo.
     """
-    df = merge_features(PAIRS_DF, hog_features, extractor="hog")
+    pairs_df = pd.read_parquet(PAIRS_WITH_LABELS_PATH)
+    df = merge_features(pairs_df, hog_features, extractor="hog")
     df.to_parquet("data/preprocessed/feature_matrix_hog.parquet")
     return make_output(df)
 
@@ -75,6 +74,7 @@ def merge_lbp_features_with_pairs_dataset(lbp_features):
     """Monta conjunto de dados tabular final com as características
     LBP extraídas e a variável alvo.
     """
-    df = merge_features(PAIRS_DF, lbp_features, extractor="lbp")
+    pairs_df = pd.read_parquet(PAIRS_WITH_LABELS_PATH)
+    df = merge_features(pairs_df, lbp_features, extractor="lbp")
     df.to_parquet("data/preprocessed/feature_matrix_lbp.parquet")
     return make_output(df)
