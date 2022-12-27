@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Dict
 import json
 
 import cv2
@@ -8,7 +8,7 @@ import pandas as pd
 from PIL import Image
 from loguru import logger
 
-from dagster import op
+from dagster import asset, AssetIn
 
 from tqdm import tqdm
 from loguru import logger
@@ -51,8 +51,22 @@ def convert2gray(image: np.array):
     return cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
 
-@op
-def load_and_detect_faces(unique_images_df: pd.DataFrame) -> str:
+def filter_faces(faces: List[List]) -> List:
+    for face in faces:
+        x, y, w, h = face
+        in_x = x <= 125 <= (x + w)
+        in_y = y <= 125 <= (y + h)
+        if in_x and in_y:
+            # pixel central está contido no bbox
+            return face
+    return list()
+
+
+@asset(
+    ins={"unique_images_df": AssetIn(key="get_unique_images")},
+    group_name="lfw_preprocessing",
+)
+def load_and_detect_faces(unique_images_df: pd.DataFrame) -> Dict:
     """Extrai os bounding boxes de faces encontrados para cada imagem
     em um json
     """
@@ -74,22 +88,14 @@ def load_and_detect_faces(unique_images_df: pd.DataFrame) -> str:
     with open(DETECTED_FACES_JSON, "w") as j:
         json.dump(detected_faces, j)
 
-    return DETECTED_FACES_JSON
+    return detected_faces
 
 
-def filter_faces(faces: List[List]) -> List:
-    for face in faces:
-        x, y, w, h = face
-        in_x = x <= 125 <= (x + w)
-        in_y = y <= 125 <= (y + h)
-        if in_x and in_y:
-            # pixel central está contido no bbox
-            return face
-    return list()
-
-
-@op
-def filter_faces_list(detected_faces_json: str) -> str:
+@asset(
+    ins={"detected_faces_dict": AssetIn(key="load_and_detect_faces")},
+    group_name="lfw_preprocessing",
+)
+def filter_faces_list(detected_faces_dict: Dict) -> Dict:
     """Le o arquivo json com as faces detectadas para cada imagem
     e filtra apenas o bbox que contem o pixel central da imagem
 
@@ -97,11 +103,9 @@ def filter_faces_list(detected_faces_json: str) -> str:
     retornadas (apenas path) em uma lista separada.
     """
     logger.info("Filtering multiple faces detection")
-    with open(detected_faces_json, "r") as j:
-        detected_faces = json.loads(j.read())
 
     filtered_faces = {
-        path: filter_faces(faces) for path, faces in detected_faces.items()
+        path: filter_faces(faces) for path, faces in detected_faces_dict.items()
     }
 
     faces_without_bbox = [
@@ -121,18 +125,19 @@ def filter_faces_list(detected_faces_json: str) -> str:
     with open(FILTERED_FACES_JSON, "w") as j:
         j.write(json.dumps(clean_filtered_faces))
 
-    return FILTERED_FACES_JSON
+    return clean_filtered_faces
 
 
-@op
-def cut_faces(filtered_faces_json: str) -> bool:
+@asset(
+    ins={"filtered_faces_dict": AssetIn(key="filter_faces_list")},
+    group_name="lfw_preprocessing",
+)
+def cut_faces(filtered_faces_dict: Dict) -> None:
     """Recebe o json com os caminhos das imagens e os bbox
     válidos para a realização do corte das imagens"""
     logger.info("Cutting faces")
-    with open(filtered_faces_json, "r") as j:
-        filtered_faces = json.loads(j.read())
 
-    for path, bbox in tqdm(filtered_faces.items()):
+    for path, bbox in tqdm(filtered_faces_dict.items()):
         image_filename = path.split("/")[-1]
         processed_image_path = PREPROCESSED_IMAGE_PATH.format(
             image_filename=image_filename
@@ -141,5 +146,3 @@ def cut_faces(filtered_faces_json: str) -> bool:
         img = Image.open(path)
         cutted_img = img.crop((x, y, x + w, y + h))
         cutted_img.save(processed_image_path)
-
-    return True

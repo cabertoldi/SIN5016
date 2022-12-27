@@ -3,7 +3,7 @@ from typing import Tuple, List
 import pandas as pd
 
 from loguru import logger
-from dagster import op
+from dagster import asset, AssetIn, Output, MetadataValue
 
 from src.data.download import PAIRS_DOWNLOADED_FILES
 
@@ -74,15 +74,25 @@ def read_pairs_file(pairs_file: str, nrows: int) -> pd.DataFrame:
     return pd.concat([match_df, nonmatch_df])
 
 
-def get_unique_images(pairs_df: pd.DataFrame) -> pd.DataFrame:
+@asset(
+    ins={"pairs_df": AssetIn(key="genereate_pairs_with_labels_df")},
+    group_name="lfw_preprocessing",
+)
+def get_unique_images(pairs_df: pd.DataFrame):
     """Retorna um dataframe com todas as imagens que estão sendo utilizadas no conjunto de dados."""
     img1 = pairs_df[["img1"]].rename(columns={"img1": "img"})
     img2 = pairs_df[["img2"]].rename(columns={"img2": "img"})
     imgs = pd.concat([img1, img2]).drop_duplicates()
-    return imgs
+
+    metadata = {
+        "total_images": len(imgs),
+        "preview": MetadataValue.md(imgs.head(5).to_markdown()),
+    }
+
+    return Output(value=imgs, metadata=metadata)
 
 
-@op
+@asset(group_name="lfw_preprocessing")
 def genereate_pairs_with_labels_df() -> pd.DataFrame:
     """Gera o conjunto de dados com os pares associados e a variável alvo calculada"""
 
@@ -95,12 +105,3 @@ def genereate_pairs_with_labels_df() -> pd.DataFrame:
 
     pairs_with_labels_df.to_parquet(PAIRS_WITH_LABELS_PATH)
     return pairs_with_labels_df
-
-
-@op
-def generate_unique_images_dataset(pairs_with_labels_df: pd.DataFrame) -> pd.DataFrame:
-    """Gera o conjunto de dados com o caminho de todas as imagens que serão preprocessadas"""
-    logger.info("Generating images list...")
-    imgs_df = get_unique_images(pairs_with_labels_df)
-    imgs_df.to_parquet(UNIQUE_IMAGES_PATH)
-    return imgs_df
