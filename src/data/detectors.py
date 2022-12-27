@@ -8,14 +8,17 @@ import pandas as pd
 from PIL import Image
 from loguru import logger
 
-from multiprocessing.dummy import Pool
 from dagster import op
 
 from tqdm import tqdm
+from loguru import logger
 
 
 HAAR_CASCADES_PATH = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
 DETECTED_FACES_JSON = "data/interim/detected_faces.json"
+FILTERED_FACES_JSON = "data/interim/filtered_faces.json"
+PREPROCESSED_IMAGE_PATH = "data/preprocessed/images/{image_filename}"
+PROBLEMATIC_IMAGES_JSON = "data/interim/problems.csv"
 DETECTOR = cv2.CascadeClassifier(HAAR_CASCADES_PATH)
 SCALE_FACTOR = 1.02
 MIN_NEIGHBORS = 2
@@ -50,7 +53,7 @@ def convert2gray(image: np.array):
 
 @op
 def load_and_detect_faces(unique_images_df: pd.DataFrame) -> str:
-    """ Extrai os bounding boxes de faces encontrados para cada imagem
+    """Extrai os bounding boxes de faces encontrados para cada imagem
     em um json
     """
     images_df = unique_images_df
@@ -58,22 +61,13 @@ def load_and_detect_faces(unique_images_df: pd.DataFrame) -> str:
     paths = images_df["img"].values
 
     logger.info("Loading images")
-    images = [
-        load_image(path)
-        for path in tqdm(paths)
-    ]
-    
+    images = [load_image(path) for path in tqdm(paths)]
+
     logger.info("Converting to grayscale")
-    gray_images = [
-        convert2gray(im)
-        for im in tqdm(images)
-    ]
+    gray_images = [convert2gray(im) for im in tqdm(images)]
 
     logger.info("Extracting faces")
-    faces = [
-        vj_face_detector(gray)
-        for gray in tqdm(gray_images)
-    ]
+    faces = [vj_face_detector(gray) for gray in tqdm(gray_images)]
 
     detected_faces = {path: _faces for path, _faces in zip(paths, faces)}
 
@@ -81,3 +75,71 @@ def load_and_detect_faces(unique_images_df: pd.DataFrame) -> str:
         json.dump(detected_faces, j)
 
     return DETECTED_FACES_JSON
+
+
+def filter_faces(faces: List[List]) -> List:
+    for face in faces:
+        x, y, w, h = face
+        in_x = x <= 125 <= (x + w)
+        in_y = y <= 125 <= (y + h)
+        if in_x and in_y:
+            # pixel central está contido no bbox
+            return face
+    return list()
+
+
+@op
+def filter_faces_list(detected_faces_json: str) -> str:
+    """Le o arquivo json com as faces detectadas para cada imagem
+    e filtra apenas o bbox que contem o pixel central da imagem
+
+    imagens que não contenham nenhum bbox com o pixel central serão
+    retornadas (apenas path) em uma lista separada.
+    """
+    logger.info("Filtering multiple faces detection")
+    with open(detected_faces_json, "r") as j:
+        detected_faces = json.loads(j.read())
+
+    filtered_faces = {
+        path: filter_faces(faces) for path, faces in detected_faces.items()
+    }
+
+    faces_without_bbox = [
+        path for path, faces in filtered_faces.items() if len(faces) == 0
+    ]
+
+    clean_filtered_faces = {
+        path: face
+        for path, face in filtered_faces.items()
+        if path not in faces_without_bbox
+    }
+
+    pd.DataFrame({"img": faces_without_bbox}).to_csv(
+        PROBLEMATIC_IMAGES_JSON, index=False
+    )
+
+    with open(FILTERED_FACES_JSON, "w") as j:
+        j.write(json.dumps(clean_filtered_faces))
+
+    return FILTERED_FACES_JSON
+
+
+@op
+def cut_faces(filtered_faces_json: str) -> bool:
+    """Recebe o json com os caminhos das imagens e os bbox
+    válidos para a realização do corte das imagens"""
+    logger.info("Cutting faces")
+    with open(filtered_faces_json, "r") as j:
+        filtered_faces = json.loads(j.read())
+
+    for path, bbox in tqdm(filtered_faces.items()):
+        image_filename = path.split("/")[-1]
+        processed_image_path = PREPROCESSED_IMAGE_PATH.format(
+            image_filename=image_filename
+        )
+        x, y, w, h = bbox
+        img = Image.open(path)
+        cutted_img = img.crop((x, y, x + w, y + h))
+        cutted_img.save(processed_image_path)
+
+    return True
