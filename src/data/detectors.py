@@ -62,10 +62,7 @@ def filter_faces(faces: List[List]) -> List:
     return list()
 
 
-@asset(
-    ins={"unique_images_df": AssetIn(key="get_unique_images")},
-    group_name="lfw_preprocessing",
-)
+@asset(ins={"unique_images_df": AssetIn(key="get_unique_images")})
 def load_and_detect_faces(unique_images_df: pd.DataFrame) -> Dict:
     """Extrai os bounding boxes de faces encontrados para cada imagem
     em um json
@@ -91,10 +88,7 @@ def load_and_detect_faces(unique_images_df: pd.DataFrame) -> Dict:
     return detected_faces
 
 
-@asset(
-    ins={"detected_faces_dict": AssetIn(key="load_and_detect_faces")},
-    group_name="lfw_preprocessing",
-)
+@asset(ins={"detected_faces_dict": AssetIn(key="load_and_detect_faces")})
 def filter_faces_list(detected_faces_dict: Dict) -> Dict:
     """Le o arquivo json com as faces detectadas para cada imagem
     e filtra apenas o bbox que contem o pixel central da imagem
@@ -128,10 +122,7 @@ def filter_faces_list(detected_faces_dict: Dict) -> Dict:
     return clean_filtered_faces
 
 
-@asset(
-    ins={"filtered_faces_dict": AssetIn(key="filter_faces_list")},
-    group_name="lfw_preprocessing",
-)
+@asset(ins={"filtered_faces_dict": AssetIn(key="filter_faces_list")})
 def cut_faces(filtered_faces_dict: Dict) -> None:
     """Recebe o json com os caminhos das imagens e os bbox
     válidos para a realização do corte das imagens"""
