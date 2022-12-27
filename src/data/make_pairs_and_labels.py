@@ -13,6 +13,9 @@ UNIQUE_IMAGES_PATH = "data/interim/images_paths.parquet"
 
 
 def get_image_path(person_name: str, photo_number: str) -> str:
+    """A partir do nome da pessoa no conjunto de dados retorna
+    o caminho da imagem (em disco local) associada àquela pessoa.
+    """
     photo_number = str(photo_number).zfill(4)
     raw_path = f"{RAW_IMAGES_PATH}/{person_name}"
     image_filename = f"{person_name}_{photo_number}.jpg"
@@ -20,6 +23,16 @@ def get_image_path(person_name: str, photo_number: str) -> str:
 
 
 def preprocess_match_df(df: pd.DataFrame) -> pd.DataFrame:
+    """Recebe o dataframe de matches que contêm as colunas
+    nome, imagem1, imagem2 e retorna o dataset com o completo com
+    - nome pessoa 1
+    - nome pessoa 2
+    - id_imagem_1
+    - id_imagem_2
+    - caminho_imagem_1
+    - caimnho_imagem_2
+    - match
+    """
     logger.info("Preprocessing match df...")
     df.columns = ["person_name", "img1_id", "img2_id"]
     df["img1"] = df.apply(
@@ -62,6 +75,7 @@ def read_pairs_file(pairs_file: str, nrows: int) -> pd.DataFrame:
 
 
 def get_unique_images(pairs_df: pd.DataFrame) -> pd.DataFrame:
+    """Retorna um dataframe com todas as imagens que estão sendo utilizadas no conjunto de dados."""
     img1 = pairs_df[["img1"]].rename(columns={"img1": "img"})
     img2 = pairs_df[["img2"]].rename(columns={"img2": "img"})
     imgs = pd.concat([img1, img2]).drop_duplicates()
@@ -70,6 +84,7 @@ def get_unique_images(pairs_df: pd.DataFrame) -> pd.DataFrame:
 
 @op
 def genereate_pairs_with_labels_df() -> pd.DataFrame:
+    """Gera o conjunto de dados com os pares associados e a variável alvo calculada"""
 
     pairs_with_labels_df = pd.concat(
         [
@@ -84,6 +99,7 @@ def genereate_pairs_with_labels_df() -> pd.DataFrame:
 
 @op
 def generate_unique_images_dataset(pairs_with_labels_df: pd.DataFrame) -> pd.DataFrame:
+    """Gera o conjunto de dados com o caminho de todas as imagens que serão preprocessadas"""
     logger.info("Generating images list...")
     imgs_df = get_unique_images(pairs_with_labels_df)
     imgs_df.to_parquet(UNIQUE_IMAGES_PATH)

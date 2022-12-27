@@ -19,7 +19,7 @@ DETECTOR = cv2.CascadeClassifier(HAAR_CASCADES_PATH)
 
 
 def vj_face_detector(image: np.array) -> List:
-    """Recebe uma imagem (250x250) com 3 canais (RBG)
+    """Recebe uma imagem (250x250) em escala de cinza
     e retorna as bounding boxes das faces detectadas.
     """
 
@@ -27,7 +27,6 @@ def vj_face_detector(image: np.array) -> List:
         image,
         scaleFactor=1.2,
         minNeighbors=2,
-        # minSize=VJ_MINSIZE,
         flags=cv2.CASCADE_DO_CANNY_PRUNING,
     )
 
@@ -36,7 +35,7 @@ def vj_face_detector(image: np.array) -> List:
 
 
 def load_image(path) -> np.array:
-    """Retorna um array 250x250x1"""
+    """Retorna um array 250x250x3"""
     img = Image.open(path)
     np_img = np.asarray(img)
     return np_img
@@ -57,7 +56,7 @@ def load_and_detect_faces(unique_images_df: pd.DataFrame) -> str:
         images = p.map(load_image, paths)
 
     with Pool(processes=15) as p:
-        logger.info("Converting 2 grayscale")
+        logger.info("Converting to grayscale")
         gray_images = p.map(convert2gray, images)
 
     with Pool(processes=15) as p:
