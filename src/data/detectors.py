@@ -47,6 +47,9 @@ def convert2gray(image: np.array):
 
 @op
 def load_and_detect_faces(unique_images_df: pd.DataFrame) -> str:
+    """ Extrai os bounding boxes de faces encontrados para cada imagem
+    em um json
+    """
     images_df = unique_images_df
 
     paths = images_df["img"].values
