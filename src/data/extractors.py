@@ -21,6 +21,11 @@ HOG_FEATURES_PATH = "data/preprocessed/extractors/hog_features.parquet"
 LBP_FEATURES_PATH = "data/preprocessed/extractors/lbp_features.parquet"
 PREPROCESSED_IMAGES_DIR = PREPROCESSED_IMAGE_PATH.format(image_filename="")
 HIST_BINS = 10
+IMAGE_WIDTH = 150
+RESIZE_FACTOR = 0.5
+RESIZED_WIDTH = int(RESIZE_FACTOR * IMAGE_WIDTH)
+RESIZED_IMAGE = (RESIZED_WIDTH, RESIZED_WIDTH)
+HOG_PIXELS_PER_CELL = 10
 
 
 def get_images_paths() -> List[str]:
@@ -38,17 +43,27 @@ def hog_extractor():
     baseado no extrator HOG (Histogram of Oriented Gradients).
     """
     logger.info("Running hog extractor")
-    images_paths = get_images_paths()
+    images_paths: List[str] = get_images_paths()
 
     histograms = list()
     for path in tqdm(images_paths):
         # load image
-        img = np.asarray(Image.open(path).resize((62, 47)))
+        img = np.asarray(Image.open(path).resize(RESIZED_IMAGE))
         gray_level = rgb2gray(img)
         # extract hog
-        _hog = hog(gray_level, visualize=False, feature_vector=True)
+        _hog = hog(
+            gray_level,
+            feature_vector=True,
+            visualize=False,
+            pixels_per_cell=(HOG_PIXELS_PER_CELL, HOG_PIXELS_PER_CELL),
+            cells_per_block=(1, 1),
+            block_norm="L1",
+            orientations=5,
+        )
         # get histogram of hog
-        histograms.append(_hog)
+        n_bins = 30
+        hist, _ = np.histogram(_hog, bins=n_bins, density=True)
+        histograms.append(hist)
 
     df = pd.DataFrame([[img, hist] for img, hist in zip(images_paths, histograms)])
 
@@ -74,12 +89,14 @@ def lbp_extractor():
     histograms = list()
     for path in tqdm(images_paths):
         # load image
-        img = np.asarray(Image.open(path).resize((62, 47)))
+        img = np.asarray(Image.open(path).resize(RESIZED_IMAGE))
         gray_level = rgb2gray(img)
         # extract hog
-        _lbp = local_binary_pattern(gray_level, P=8 * 3, R=3)
-        # get histogram of hog
-        histograms.append(_lbp.flatten())
+        _lbp = local_binary_pattern(gray_level, P=3, R=3)
+        # get histogram of lbp
+        n_bins = 30
+        hist, _ = np.histogram(_lbp, bins=n_bins, density=True)
+        histograms.append(hist)
 
     df = pd.DataFrame([[img, hist] for img, hist in zip(images_paths, histograms)])
 
