@@ -12,6 +12,7 @@ from skimage.feature import hog, local_binary_pattern
 from skimage.color import rgb2gray
 
 from src.data.detectors import PREPROCESSED_IMAGE_PATH
+from src.data.detectors import IMAGE_WIDTH
 
 from tqdm import tqdm
 from loguru import logger
@@ -20,8 +21,7 @@ from loguru import logger
 HOG_FEATURES_PATH = "data/preprocessed/extractors/hog_features.parquet"
 LBP_FEATURES_PATH = "data/preprocessed/extractors/lbp_features.parquet"
 PREPROCESSED_IMAGES_DIR = PREPROCESSED_IMAGE_PATH.format(image_filename="")
-HIST_BINS = 10
-IMAGE_WIDTH = 150
+HIST_BINS = 30
 RESIZE_FACTOR = 0.5
 RESIZED_WIDTH = int(RESIZE_FACTOR * IMAGE_WIDTH)
 RESIZED_IMAGE = (RESIZED_WIDTH, RESIZED_WIDTH)
@@ -61,8 +61,7 @@ def hog_extractor():
             orientations=5,
         )
         # get histogram of hog
-        n_bins = 30
-        hist, _ = np.histogram(_hog, bins=n_bins, density=True)
+        hist, _ = np.histogram(_hog, bins=HIST_BINS, density=True)
         histograms.append(hist)
 
     df = pd.DataFrame([[img, hist] for img, hist in zip(images_paths, histograms)])
@@ -94,8 +93,7 @@ def lbp_extractor():
         # extract hog
         _lbp = local_binary_pattern(gray_level, P=3, R=3)
         # get histogram of lbp
-        n_bins = 30
-        hist, _ = np.histogram(_lbp, bins=n_bins, density=True)
+        hist, _ = np.histogram(_lbp, bins=HIST_BINS, density=True)
         histograms.append(hist)
 
     df = pd.DataFrame([[img, hist] for img, hist in zip(images_paths, histograms)])

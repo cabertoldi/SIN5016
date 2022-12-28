@@ -21,6 +21,8 @@ PREPROCESSED_IMAGE_PATH = "data/preprocessed/images/{image_filename}"
 PROBLEMATIC_IMAGES_JSON = "data/interim/problems.csv"
 DETECTOR = cv2.CascadeClassifier(HAAR_CASCADES_PATH)
 SCALE_FACTOR = 1.02
+IMAGE_WIDTH = 150
+IMAGE_RESIZE = (IMAGE_WIDTH, IMAGE_WIDTH)
 MIN_NEIGHBORS = 2
 
 
@@ -135,5 +137,5 @@ def cut_faces(filtered_faces_dict: Dict) -> None:
         )
         x, y, w, h = bbox
         img = Image.open(path)
-        cutted_img = img.crop((x, y, x + w, y + h))
+        cutted_img = img.crop((x, y, x + w, y + h)).resize(IMAGE_RESIZE)
         cutted_img.save(processed_image_path)

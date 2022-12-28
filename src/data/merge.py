@@ -6,8 +6,6 @@ from src.data.make_pairs_and_labels import PAIRS_WITH_LABELS_PATH
 
 from dagster import asset, Output, AssetIn, MetadataValue
 
-from src.data.extractors import HIST_BINS
-
 
 def merge_features(
     pairs_df: pd.DataFrame, features_df: pd.DataFrame, extractor: str
