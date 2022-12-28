@@ -20,6 +20,7 @@ from loguru import logger
 HOG_FEATURES_PATH = "data/preprocessed/extractors/hog_features.parquet"
 LBP_FEATURES_PATH = "data/preprocessed/extractors/lbp_features.parquet"
 PREPROCESSED_IMAGES_DIR = PREPROCESSED_IMAGE_PATH.format(image_filename="")
+HIST_BINS = 10
 
 
 def get_images_paths() -> List[str]:
@@ -42,13 +43,12 @@ def hog_extractor():
     histograms = list()
     for path in tqdm(images_paths):
         # load image
-        img = np.asarray(Image.open(path))
+        img = np.asarray(Image.open(path).resize((62, 47)))
         gray_level = rgb2gray(img)
         # extract hog
         _hog = hog(gray_level, visualize=False, feature_vector=True)
         # get histogram of hog
-        hist, _ = np.histogram(_hog, bins=255)
-        histograms.append(hist)
+        histograms.append(_hog)
 
     df = pd.DataFrame([[img, hist] for img, hist in zip(images_paths, histograms)])
 
@@ -74,13 +74,12 @@ def lbp_extractor():
     histograms = list()
     for path in tqdm(images_paths):
         # load image
-        img = np.asarray(Image.open(path))
+        img = np.asarray(Image.open(path).resize((62, 47)))
         gray_level = rgb2gray(img)
         # extract hog
         _lbp = local_binary_pattern(gray_level, P=8 * 3, R=3)
         # get histogram of hog
-        hist, _ = np.histogram(_lbp, bins=255)
-        histograms.append(hist)
+        histograms.append(_lbp.flatten())
 
     df = pd.DataFrame([[img, hist] for img, hist in zip(images_paths, histograms)])
 

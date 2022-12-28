@@ -6,6 +6,8 @@ from src.data.make_pairs_and_labels import PAIRS_WITH_LABELS_PATH
 
 from dagster import asset, Output, AssetIn, MetadataValue
 
+from src.data.extractors import HIST_BINS
+
 
 def merge_features(
     pairs_df: pd.DataFrame, features_df: pd.DataFrame, extractor: str
@@ -39,9 +41,12 @@ def merge_features(
     new_df = new_df.dropna()
 
     df_img1 = pd.DataFrame(new_df[f"{extractor}_features_img1"].tolist())
-    df_img1.columns = list(range(255))
+    n_cols = df_img1.shape[1]
+    df_img1.columns = list(range(n_cols))
+
     df_img2 = pd.DataFrame(new_df[f"{extractor}_features_img2"].tolist())
-    df_img2.columns = list(range(255, 510))
+    df_img2.columns = list(range(n_cols, n_cols * 2))
+
     df_final = pd.concat([df_img1, df_img2], axis=1)
     df_final["match"] = new_df["match"]
     df_final.columns = [str(c) for c in df_final.columns]
