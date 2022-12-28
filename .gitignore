@@ -9,3 +9,9 @@ venv/*
 *.jpg
 *.egg-info
 tmp*
+.logs_queue
+.telemetry
+history/
+logs/
+schedules/
+storage/
