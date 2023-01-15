@@ -1,3 +1,5 @@
+import numpy as np
+
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
@@ -9,7 +11,6 @@ from loguru import logger
 
 
 class TrainTestLoop:
-
     def __init__(
         self,
         model,
@@ -26,8 +27,16 @@ class TrainTestLoop:
         self.loss_fn = loss_fn
         self.optimizer = optimizer
 
+        # parâmetros da parada antecipada
+        self.max_epochs_without_improvement = 300
+        self.epochs_without_improvement = 0
+        self.best_params = None
+        self.lower_loss = np.inf
+        self.stop_training = False
+
     def train_loop(self):
         self.model.train()
+        running_acc = 0
         running_loss = 0
         steps = 0
         loader = DataLoader(self.train_dataset, batch_size=128, shuffle=True)
@@ -40,32 +49,58 @@ class TrainTestLoop:
             loss = self.loss_fn(preds.squeeze(), y)
             running_loss += loss.item()
 
+            # acc
+            running_acc += self.score(y, preds.squeeze())
+
             # retropropaga o erro
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
             steps += 1
 
-        return running_loss/steps
+        return running_loss / steps, running_acc / steps
+
+    def score(self, y_test, y_pred):
+        y_test = y_test.detach().cpu().numpy()
+        y_pred = y_pred.detach().cpu().numpy()
+        y_pred = np.where(y_pred >= 0.5, 1, 0)
+        return np.sum((y_test == y_pred)) / len(y_test)
+
+    def evaluate_early_stoping(self, current_val_loss: np.float64):
+        if current_val_loss < self.lower_loss:
+            self.best_params = self.model.state_dict()
+            self.epochs_without_improvement = 0
+            self.lower_loss = current_val_loss
+        else:
+            self.epochs_without_improvement += 1
+
+        if self.epochs_without_improvement >= self.max_epochs_without_improvement:
+            self.stop_training = True
 
     def test_loop(self):
         running_loss = 0
+        running_acc = 0
         steps = 0
-
-        self.optimizer.zero_grad()
+        loader = DataLoader(self.val_dataset, batch_size=len(self.val_dataset))
+        self.model.eval()
 
         with torch.no_grad():
-            self.model.eval()
-
-            loader = DataLoader(self.val_dataset, batch_size=len(self.val_dataset))
-
             for x1, x2, y in loader:
                 preds = self.model(x1, x2)
+
+                # loss
                 loss = self.loss_fn(preds.squeeze(), y)
-                running_loss += loss.item()
+                loss_value = loss.item()
+                running_loss += loss_value
+
+                # acc
+                running_acc += self.score(y, preds.squeeze())
+
                 steps += 1
 
-        return running_loss/steps
+        self.evaluate_early_stoping(running_loss / steps)
+
+        return running_loss / steps, running_acc / steps
 
     def fit(self):
         logger.info("Starting model training")
@@ -74,12 +109,20 @@ class TrainTestLoop:
         val_loss = []
 
         for i in range(self.epochs):
-            _tloss = self.train_loop()
-            _vloss = self.test_loop()
+            _tloss, _tacc = self.train_loop()
+            _vloss, _vacc = self.test_loop()
             train_loss.append(_tloss)
             val_loss.append(_vloss)
 
-            logger.info(f"Epoch: {i} - Train loss: {_tloss} - Val loss: {_vloss}")
+            logger.info(
+                f"Epoch: {i} - Train loss: {_tloss} - Train acc: {_tacc} - Val loss: {_vloss} - Val acc: {_vacc} - Lower val loss = {self.lower_loss}"
+            )
+
+            if self.stop_training:
+                logger.warning(
+                    "Número máximo de épocas sem melhoria atingido. Interrompendo o treinamento."
+                )
+                break
 
         return train_loss, val_loss
 
@@ -94,18 +137,18 @@ model.to("cuda")
 dataset.to_cuda()
 
 # separa em treino e teste
-train_dataset, test_dataset = train_test_split(dataset, test_size=.2)
+train_dataset, test_dataset = train_test_split(dataset, test_size=0.3)
 
-loss_fn  = nn.BCELoss()
-optimizer = torch.optim.SGD(params=model.parameters(), lr=3e-4, momentum=.5)
+loss_fn = nn.BCELoss()
+optimizer = torch.optim.Adam(params=model.parameters(), lr=2e-3)
 
 train_loop = TrainTestLoop(
     model=model,
     train_dataset=train_dataset,
     val_dataset=test_dataset,
-    epochs=10000,
+    epochs=1000,
     loss_fn=loss_fn,
-    optimizer=optimizer
+    optimizer=optimizer,
 )
 
 train_loop.fit()
