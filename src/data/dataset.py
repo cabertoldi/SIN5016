@@ -29,7 +29,9 @@ BAD_IMAGES = [
 
 
 def train_test_split(dataset: Dataset, test_size: float):
-    split_generator = ShuffleSplit(n_splits=1, test_size=test_size).split(dataset)
+    split_generator = ShuffleSplit(
+        n_splits=1, test_size=test_size, random_state=0
+    ).split(dataset)
     train_idx, test_idx = list(split_generator)[0]
 
     train_dataset = Subset(dataset=dataset, indices=train_idx)

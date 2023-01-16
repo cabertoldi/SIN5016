@@ -16,6 +16,8 @@ from sklearn.model_selection import KFold
 from loguru import logger
 from itertools import product
 
+from sklearn.metrics import classification_report
+
 writer = SummaryWriter("runs/large-v5")
 
 
@@ -230,7 +232,7 @@ def run_cross_val(dataset, cv):
 
     df = pd.DataFrame({"conv_dropout": p1, "dense_dropout": p2, "acc": acc, "std": std})
     df["model"] = "ConvNet"
-    df.to_csv("execucao/convnet.csv")
+    df.to_csv("execucao/convnet.csv", index=False)
 
     return best_params
 
@@ -244,21 +246,22 @@ def main():
     train_dataset, validation_dataset = train_test_split(train_dataset, test_size=0.2)
 
     # get best params from cross validation
-    logger.info("Starting cross validation pipeline")
+    # logger.info("Starting cross validation pipeline")
     # best_params = run_cross_val(train_dataset, cv=5)
     best_params = {
-        "conv_dropout": 0.1,
-        "dense_dropout": 0.3,
+        "conv_dropout": 0.3,
+        "dense_dropout": 0.5,
     }
 
     # full train
     logger.info("Training with the complete training set")
     model = ConvNet(**best_params)
     model.to("cuda")
-    loss_fn = nn.BCELoss(model.parameters())
+    loss_fn = nn.BCELoss()
     optimizer = torch.optim.Adam(params=model.parameters(), lr=2e-3)
 
     tloop = TrainTestLoop(
+        model=model,
         train_dataset=train_dataset,
         val_dataset=validation_dataset,
         epochs=10_000,
@@ -273,9 +276,24 @@ def main():
         {"train_loss": tloss, "val_loss": vloss, "train_acc": tacc, "val_acc": vacc}
     )
     results["model"] = "ConvNet"
-    results.to_csv("execucao/convnet_loss.csv")
+    results.to_csv("execucao/convnet_loss.csv", index=False)
+
+    torch.save(model.state_dict(), "execucao/convnet_model")
 
     # submit test data to model
+
+    model = ConvNet(**best_params)
+    model.load_state_dict(torch.load("execucao/convnet_model"))
+    model.to("cuda")
+
+    test_loader = DataLoader(test_dataset, batch_size=len(test_dataset))
+    im1, im2, target = next(iter(test_loader))
+
+    y_pred = model.predict(im1, im2)
+    y_true = target.detach().cpu().numpy()
+
+    test_results = pd.DataFrame({"y_true": y_true, "y_pred": y_pred})
+    test_results.to_csv("execucao/convnet_test_preds.csv", index=False)
 
 
 if __name__ == "__main__":
