@@ -16,7 +16,7 @@ preprocessor = tvis.transforms.Compose(
     [
         tvis.transforms.ToTensor(),
         tvis.transforms.Resize((110, 110)),
-        # tvis.transforms.Normalize((0.5), (0.2)),
+        tvis.transforms.Normalize((0.5), (0.2)),
     ]
 )
 
@@ -44,6 +44,7 @@ class LFWDataset(Dataset):
         self.data_tuples = None
         self.path = path
         self.preprocessed_prefix = preprocessed_prefix
+        self.on_cuda = False
 
     def __len__(self):
         return len(self.data)
@@ -56,6 +57,7 @@ class LFWDataset(Dataset):
         return df[~df.img1_full_id.isin(BAD_IMAGES) & ~df.img2_full_id.isin(BAD_IMAGES)]
 
     def load_data(self):
+        self.on_cuda = False
         self.load_df()
         self.load_images()
 
@@ -82,6 +84,9 @@ class LFWDataset(Dataset):
             self.data.append((im1, im2, torch.as_tensor(match).float()))
 
     def to_cuda(self):
+        if self.on_cuda:
+            return
+
         if not torch.cuda.is_available():
             raise Exception("CUDA isn't available.")
 
@@ -98,6 +103,7 @@ class LFWDataset(Dataset):
 
         gc.collect()
         self.data = new_data
+        self.on_cuda = True
 
     def free(self):
         for im1, im2, target in self.data:

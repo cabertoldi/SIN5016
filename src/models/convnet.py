@@ -9,27 +9,30 @@ DROPOUT_P = 0.30
 
 
 class ConvNet(nn.Module):
-    def __init__(self):
+    def __init__(self, conv_dropout: float, dense_dropout: float):
         super(ConvNet, self).__init__()
+
+        self.conv_dropout = conv_dropout
+        self.dense_dropout = dense_dropout
 
         self.conv_im1 = nn.Sequential(
             nn.Conv2d(in_channels=3, out_channels=20, kernel_size=3),
             nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Dropout2d(DROPOUT_P),
-            nn.Conv2d(in_channels=20, out_channels=40, kernel_size=3),
+            nn.Dropout2d(self.conv_dropout),
+            nn.Conv2d(in_channels=20, out_channels=60, kernel_size=3),
             nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Dropout2d(DROPOUT_P),
-            nn.Conv2d(in_channels=40, out_channels=60, kernel_size=3),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Dropout2d(DROPOUT_P),
+            nn.Dropout2d(self.conv_dropout),
             nn.Conv2d(in_channels=60, out_channels=120, kernel_size=3),
             nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Dropout2d(DROPOUT_P),
+            nn.Dropout2d(self.conv_dropout),
+            nn.Conv2d(in_channels=120, out_channels=240, kernel_size=3),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Dropout2d(self.conv_dropout),
         )
 
         self.dense = nn.Sequential(
-            nn.Linear(in_features=3000, out_features=512),
-            nn.Dropout(0.75),
+            nn.Linear(in_features=6000, out_features=512),
+            nn.Dropout(self.dense_dropout),
             nn.Linear(in_features=512, out_features=1),
         )
 
