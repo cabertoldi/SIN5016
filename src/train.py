@@ -245,12 +245,17 @@ def main():
 
     # get best params from cross validation
     logger.info("Starting cross validation pipeline")
-    best_params = run_cross_val(train_dataset, cv=5)
+    # best_params = run_cross_val(train_dataset, cv=5)
+    best_params = {
+        "conv_dropout": 0.1,
+        "dense_dropout": 0.3,
+    }
 
     # full train
     logger.info("Training with the complete training set")
     model = ConvNet(**best_params)
-    loss_fn = nn.BCELoss()
+    model.to("cuda")
+    loss_fn = nn.BCELoss(model.parameters())
     optimizer = torch.optim.Adam(params=model.parameters(), lr=2e-3)
 
     tloop = TrainTestLoop(
@@ -261,8 +266,14 @@ def main():
         optimizer=optimizer,
     )
 
-    tloop.fit()
+    tloss, vloss, tacc, vacc = tloop.fit()
     logger.info(f"Accuracy on validation set: {tloop.best_acc}")
+
+    results = pd.DataFrame(
+        {"train_loss": tloss, "val_loss": vloss, "train_acc": tacc, "val_acc": vacc}
+    )
+    results["model"] = "ConvNet"
+    results.to_csv("execucao/convnet_loss.csv")
 
     # submit test data to model
 
