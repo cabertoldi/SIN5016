@@ -16,7 +16,7 @@ preprocessor = tvis.transforms.Compose(
     [
         tvis.transforms.ToTensor(),
         tvis.transforms.Resize((110, 110)),
-        tvis.transforms.Normalize((0.5), (0.5)),
+        # tvis.transforms.Normalize((0.5), (0.2)),
     ]
 )
 

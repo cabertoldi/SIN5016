@@ -5,7 +5,7 @@ import torch
 from torch import nn
 
 
-DROPOUT_P = 0.75
+DROPOUT_P = 0.30
 
 
 class ConvNet(nn.Module):
@@ -13,22 +13,24 @@ class ConvNet(nn.Module):
         super(ConvNet, self).__init__()
 
         self.conv_im1 = nn.Sequential(
-            nn.Conv2d(in_channels=3, out_channels=20, kernel_size=4),
-            nn.ReLU(True),
+            nn.Conv2d(in_channels=3, out_channels=20, kernel_size=3),
             nn.MaxPool2d(kernel_size=2, stride=2),
-            # nn.Dropout2d(DROPOUT_P),
+            nn.Dropout2d(DROPOUT_P),
             nn.Conv2d(in_channels=20, out_channels=40, kernel_size=3),
-            nn.ReLU(True),
             nn.MaxPool2d(kernel_size=2, stride=2),
-            # nn.Dropout2d(DROPOUT_P),
+            nn.Dropout2d(DROPOUT_P),
             nn.Conv2d(in_channels=40, out_channels=60, kernel_size=3),
-            nn.ReLU(True),
             nn.MaxPool2d(kernel_size=2, stride=2),
-            # nn.Dropout2d(DROPOUT_P),
+            nn.Dropout2d(DROPOUT_P),
+            nn.Conv2d(in_channels=60, out_channels=120, kernel_size=3),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Dropout2d(DROPOUT_P),
         )
 
         self.dense = nn.Sequential(
-            nn.Linear(in_features=7260, out_features=1),
+            nn.Linear(in_features=3000, out_features=512),
+            nn.Dropout(0.75),
+            nn.Linear(in_features=512, out_features=1),
         )
 
         self.sig = nn.Sigmoid()

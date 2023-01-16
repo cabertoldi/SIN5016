@@ -7,7 +7,11 @@ from torch.utils.data import DataLoader
 from src.data.dataset import LFW_DATASET, train_test_split
 from src.models.convnet import ConvNet
 
+from torch.utils.tensorboard import SummaryWriter
+
 from loguru import logger
+
+writer = SummaryWriter("runs/conv-drop_k3-3-3-3_h512_drop30v2-75_semnorm")
 
 
 class TrainTestLoop:
@@ -28,7 +32,7 @@ class TrainTestLoop:
         self.optimizer = optimizer
 
         # parâmetros da parada antecipada
-        self.max_epochs_without_improvement = 300
+        self.max_epochs_without_improvement = 50
         self.epochs_without_improvement = 0
         self.best_params = None
         self.lower_loss = np.inf
@@ -114,6 +118,10 @@ class TrainTestLoop:
             train_loss.append(_tloss)
             val_loss.append(_vloss)
 
+            writer.add_scalar("Loss/train", _tloss, i)
+            writer.add_scalar("Loss/val", _vloss, i)
+            writer.flush()
+
             logger.info(
                 f"Epoch: {i} - Train loss: {_tloss} - Train acc: {_tacc} - Val loss: {_vloss} - Val acc: {_vacc} - Lower val loss = {self.lower_loss}"
             )
@@ -146,7 +154,7 @@ train_loop = TrainTestLoop(
     model=model,
     train_dataset=train_dataset,
     val_dataset=test_dataset,
-    epochs=1000,
+    epochs=10_000,
     loss_fn=loss_fn,
     optimizer=optimizer,
 )
