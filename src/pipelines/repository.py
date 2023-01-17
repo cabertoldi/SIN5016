@@ -7,7 +7,7 @@ from src.pipelines.lfw_jobs import lfw_download
 
 from dagster import load_assets_from_modules, repository
 
-# TODO: better naming
+
 assets = load_assets_from_modules(
     modules=[make_pairs_and_labels, detectors, extractors, merge],
     group_name="lfw_preprocessing",

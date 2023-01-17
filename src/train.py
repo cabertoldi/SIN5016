@@ -77,9 +77,7 @@ class TrainTestLoop:
         y_pred = np.where(y_pred >= 0.5, 1, 0)
         return np.sum((y_test == y_pred)) / len(y_test)
 
-    def evaluate_early_stoping(
-        self, current_val_loss: np.float64, current_acc: np.float64
-    ):
+    def evaluate_early_stoping(self, current_val_loss: float, current_acc: float):
         if current_val_loss < self.lower_loss:
             self.best_params = self.model.state_dict()
             self.epochs_without_improvement = 0
@@ -237,25 +235,40 @@ def run_cross_val(dataset, cv):
     return best_params
 
 
-def main():
+def get_datasets():
     dataset = LFW_DATASET
     dataset.load_data()
     dataset.to_cuda()
-
     train_dataset, test_dataset = train_test_split(dataset, test_size=0.3)
     train_dataset, validation_dataset = train_test_split(train_dataset, test_size=0.2)
+    return test_dataset, train_dataset, validation_dataset
 
-    # get best params from cross validation
-    logger.info("Starting cross validation pipeline")
-    best_params = run_cross_val(train_dataset, cv=5)
 
-    # full train
-    logger.info("Training with the complete training set")
+def get_test_data(test_dataset):
+    test_loader = DataLoader(test_dataset, batch_size=len(test_dataset))
+    im1, im2, target = next(iter(test_loader))
+    y_true = target.detach().cpu().numpy()
+    return im1, im2, y_true
+
+
+def save_complete_train_results(tacc, tloss, vacc, vloss):
+    results = pd.DataFrame(
+        {"train_loss": tloss, "val_loss": vloss, "train_acc": tacc, "val_acc": vacc}
+    )
+    results["model"] = "ConvNet"
+    results.to_csv("execucao/convnet_loss.csv", index=False)
+
+
+def save_test_results(y_pred, y_true):
+    test_results = pd.DataFrame({"y_true": y_true, "y_pred": y_pred})
+    test_results.to_csv("execucao/convnet_test_preds.csv", index=False)
+
+
+def train_on_complete_train_set(best_params, train_dataset, validation_dataset):
     model = ConvNet(**best_params)
     model.to("cuda")
     loss_fn = nn.BCELoss()
     optimizer = torch.optim.Adam(params=model.parameters(), lr=2e-3)
-
     tloop = TrainTestLoop(
         model=model,
         train_dataset=train_dataset,
@@ -264,32 +277,36 @@ def main():
         loss_fn=loss_fn,
         optimizer=optimizer,
     )
-
     tloss, vloss, tacc, vacc = tloop.fit()
     logger.info(f"Accuracy on validation set: {tloop.best_acc}")
+    return model, tacc, tloss, vacc, vloss
 
-    results = pd.DataFrame(
-        {"train_loss": tloss, "val_loss": vloss, "train_acc": tacc, "val_acc": vacc}
+
+def main():
+    test_dataset, train_dataset, validation_dataset = get_datasets()
+
+    # ================== cross val ================================
+    logger.info("Starting cross validation pipeline")
+    best_params = run_cross_val(train_dataset, cv=5)
+
+    # ================== full train ===============================
+    logger.info("Training with the complete training set")
+    model, tacc, tloss, vacc, vloss = train_on_complete_train_set(
+        best_params, train_dataset, validation_dataset
     )
-    results["model"] = "ConvNet"
-    results.to_csv("execucao/convnet_loss.csv", index=False)
 
+    save_complete_train_results(tacc, tloss, vacc, vloss)
     torch.save(model.state_dict(), "execucao/convnet_model")
 
-    # submit test data to model
-
+    # ================== test set ==================================
     model = ConvNet(**best_params)
     model.load_state_dict(torch.load("execucao/convnet_model"))
     model.to("cuda")
 
-    test_loader = DataLoader(test_dataset, batch_size=len(test_dataset))
-    im1, im2, target = next(iter(test_loader))
-
+    im1, im2, y_true = get_test_data(test_dataset)
     y_pred = model.predict(im1, im2)
-    y_true = target.detach().cpu().numpy()
 
-    test_results = pd.DataFrame({"y_true": y_true, "y_pred": y_pred})
-    test_results.to_csv("execucao/convnet_test_preds.csv", index=False)
+    save_test_results(y_pred, y_true)
 
 
 if __name__ == "__main__":
