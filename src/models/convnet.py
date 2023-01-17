@@ -53,7 +53,8 @@ class ConvNet(nn.Module):
         return y
 
     def predict(self, x1, x2):
-        y = self.forward(x1, x2)
-        y = y.detach().cpu().numpy().flatten()
-        y = np.where(y >= 0.5, 1, 0)
+        with torch.no_grad():
+            y = self.forward(x1, x2)
+            y = y.detach().cpu().numpy().flatten()
+            y = np.where(y >= 0.5, 1, 0)
         return y

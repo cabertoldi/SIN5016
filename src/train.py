@@ -246,12 +246,8 @@ def main():
     train_dataset, validation_dataset = train_test_split(train_dataset, test_size=0.2)
 
     # get best params from cross validation
-    # logger.info("Starting cross validation pipeline")
-    # best_params = run_cross_val(train_dataset, cv=5)
-    best_params = {
-        "conv_dropout": 0.3,
-        "dense_dropout": 0.5,
-    }
+    logger.info("Starting cross validation pipeline")
+    best_params = run_cross_val(train_dataset, cv=5)
 
     # full train
     logger.info("Training with the complete training set")
