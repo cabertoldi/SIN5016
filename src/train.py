@@ -1,3 +1,4 @@
+import copy
 import numpy as np
 
 import torch
@@ -41,8 +42,9 @@ class TrainTestLoop:
         # parâmetros da parada antecipada
         self.max_epochs_without_improvement = 50
         self.epochs_without_improvement = 0
-        self.best_params = None
+        self.best_model_state_dict = None
         self.lower_loss = np.inf
+        self.best_acc = -np.inf
         self.stop_training = False
 
     def train_loop(self):
@@ -78,10 +80,9 @@ class TrainTestLoop:
         return np.sum((y_test == y_pred)) / len(y_test)
 
     def evaluate_early_stoping(self, current_val_loss: float, current_acc: float):
-        if current_val_loss < self.lower_loss:
-            self.best_params = self.model.state_dict()
+        if current_acc > self.best_acc:
+            self.best_model_state_dict = copy.deepcopy(self.model.state_dict())
             self.epochs_without_improvement = 0
-            self.lower_loss = current_val_loss
             self.best_acc = current_acc
         else:
             self.epochs_without_improvement += 1
@@ -135,7 +136,8 @@ class TrainTestLoop:
             writer.flush()
 
             logger.info(
-                f"Epoch: {i} - Train loss: {_tloss} - Train acc: {_tacc} - Val loss: {_vloss} - Val acc: {_vacc} - Lower val loss = {self.lower_loss}"
+                f"Epoch: {i} - Train loss: {_tloss} - Train acc: {_tacc} - Val loss: {_vloss}"
+                f"- Val acc: {_vacc} - best_acc = {self.best_acc}"
             )
 
             if self.stop_training:
@@ -279,24 +281,24 @@ def train_on_complete_train_set(best_params, train_dataset, validation_dataset):
     )
     tloss, vloss, tacc, vacc = tloop.fit()
     logger.info(f"Accuracy on validation set: {tloop.best_acc}")
-    return model, tacc, tloss, vacc, vloss
+    return tloop.best_model_state_dict, tacc, tloss, vacc, vloss
 
 
 def main():
     test_dataset, train_dataset, validation_dataset = get_datasets()
 
     # ================== cross val ================================
-    logger.info("Starting cross validation pipeline")
+    #logger.info("Starting cross validation pipeline")
     best_params = run_cross_val(train_dataset, cv=5)
 
     # ================== full train ===============================
     logger.info("Training with the complete training set")
-    model, tacc, tloss, vacc, vloss = train_on_complete_train_set(
+    best_model_state_dict, tacc, tloss, vacc, vloss = train_on_complete_train_set(
         best_params, train_dataset, validation_dataset
     )
 
     save_complete_train_results(tacc, tloss, vacc, vloss)
-    torch.save(model.state_dict(), "execucao/convnet_model")
+    torch.save(best_model_state_dict, "execucao/convnet_model")
 
     # ================== test set ==================================
     model = ConvNet(**best_params)
