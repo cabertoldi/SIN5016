@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-from typing import Tuple, List
+from typing import List, Tuple
+
 import pandas as pd
-
 from loguru import logger
-from dagster import asset, AssetIn, Output, MetadataValue
 
+from dagster import AssetIn, MetadataValue, Output, asset
 from src.data.download import PAIRS_DOWNLOADED_FILES
 
 RAW_IMAGES_PATH = "data/raw/lfw"

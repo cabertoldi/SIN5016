@@ -4,7 +4,6 @@ import numpy as np
 import torch
 from torch import nn
 
-
 DROPOUT_P = 0.30
 
 

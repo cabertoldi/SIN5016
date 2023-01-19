@@ -2,21 +2,16 @@
 import os
 from typing import List
 
-import pandas as pd
 import numpy as np
-
-from dagster import asset, Output, MetadataValue
-from PIL import Image
-
-from skimage.feature import hog, local_binary_pattern
-from skimage.color import rgb2gray
-
-from src.data.detectors import PREPROCESSED_IMAGE_PATH
-from src.data.detectors import IMAGE_WIDTH
-
-from tqdm import tqdm
+import pandas as pd
 from loguru import logger
+from PIL import Image
+from skimage.color import rgb2gray
+from skimage.feature import hog, local_binary_pattern
+from tqdm import tqdm
 
+from dagster import MetadataValue, Output, asset
+from src.data.detectors import IMAGE_WIDTH, PREPROCESSED_IMAGE_PATH
 
 HOG_FEATURES_PATH = "data/preprocessed/extractors/hog_features.parquet"
 LBP_FEATURES_PATH = "data/preprocessed/extractors/lbp_features.parquet"

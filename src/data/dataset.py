@@ -1,16 +1,12 @@
 import gc
 
 import pandas as pd
-
 import torch
-from torch.utils.data import Dataset, Subset
 import torchvision as tvis
-
-from sklearn.model_selection import ShuffleSplit
-
 from loguru import logger
-
 from PIL import Image
+from sklearn.model_selection import ShuffleSplit
+from torch.utils.data import Dataset, Subset
 
 preprocessor = tvis.transforms.Compose(
     [

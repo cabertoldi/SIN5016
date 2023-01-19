@@ -2,9 +2,8 @@
 
 import pandas as pd
 
+from dagster import AssetIn, MetadataValue, Output, asset
 from src.data.make_pairs_and_labels import PAIRS_WITH_LABELS_PATH
-
-from dagster import asset, Output, AssetIn, MetadataValue
 
 
 def merge_features(

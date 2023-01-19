@@ -1,23 +1,18 @@
 import copy
-import numpy as np
+from itertools import product
 
+import numpy as np
+import pandas as pd
 import torch
+from loguru import logger
+from sklearn.metrics import classification_report
+from sklearn.model_selection import KFold
 from torch import nn
 from torch.utils.data import DataLoader, Subset
+from torch.utils.tensorboard import SummaryWriter
 
 from src.data.dataset import LFW_DATASET, train_test_split
 from src.models.convnet import ConvNet
-
-import pandas as pd
-
-from torch.utils.tensorboard import SummaryWriter
-
-from sklearn.model_selection import KFold
-
-from loguru import logger
-from itertools import product
-
-from sklearn.metrics import classification_report
 
 writer = SummaryWriter("runs/large-v5")
 
@@ -288,7 +283,7 @@ def main():
     test_dataset, train_dataset, validation_dataset = get_datasets()
 
     # ================== cross val ================================
-    #logger.info("Starting cross validation pipeline")
+    # logger.info("Starting cross validation pipeline")
     best_params = run_cross_val(train_dataset, cv=5)
 
     # ================== full train ===============================
