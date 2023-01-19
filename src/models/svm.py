@@ -40,13 +40,16 @@ def polinomial_kernel(x, y, d):
 
 
 # noinspection PyMethodOverriding
-class SVC(BaseEstimator):
-    def __init__(self, c: float = 10, kernel: Callable = linear_kernel, d: int = None):
-        self.c = c
+class SVM(BaseEstimator):
+    def __init__(
+        self, C: float = 10, kernel: Callable = linear_kernel, degree: int = None
+    ):
+        self.C = C
         self.w = 0
         self.b = 0
-        self.d = d
+        self.degree = degree
         self.kernel = kernel
+        self.kernel_name = kernel.__name__
 
     @staticmethod
     def validate_target(y: np.array):
@@ -60,7 +63,7 @@ class SVC(BaseEstimator):
         p = cvxopt_matrix(k)
         q = cvxopt_matrix(-np.ones((m, 1)))
         g = cvxopt_matrix(np.vstack((np.eye(m) * -1, np.eye(m))))
-        h = cvxopt_matrix(np.hstack((np.zeros(m), np.ones(m) * self.c)))
+        h = cvxopt_matrix(np.hstack((np.zeros(m), np.ones(m) * self.C)))
         a = cvxopt_matrix(y.reshape(1, -1))
         b = cvxopt_matrix(np.zeros(1))
 
@@ -75,14 +78,14 @@ class SVC(BaseEstimator):
 
     def fit(self, x, y):
         logger.info(
-            f"Fitting SVC with params: C = {self.c}, kernel = {self.kernel.__name__}, d = {self.d}"
+            f"Fitting SVC with params: C = {self.C}, kernel = {self.kernel_name}, d = {self.degree}"
         )
 
         if not self.validate_target(y):
             raise InvalidTargetException("Targets devem estar codificados como -1 e 1")
 
         if self.kernel.__name__ == "polinomial_kernel":
-            self.kernel = partial(self.kernel, d=self.d)
+            self.kernel = partial(self.kernel, d=self.degree)
 
         y = y.reshape(-1, 1).astype(np.float64)
         k = self.kernel(x, y)
@@ -94,18 +97,14 @@ class SVC(BaseEstimator):
         return self
 
     def predict(self, x):
-        return SVC.signal(x @ self.w + self.b)
+        return np.sign(x @ self.w + self.b)
 
     def score(self, x: np.array, y: np.array) -> float:
         y_pred = self.predict(x)
         return np.sum(y == y_pred) / len(y)
 
-    @staticmethod
-    def signal(y: np.array):
-        return np.where(y >= 0, 1, -1).flatten()
-
     def __repr__(self):
-        return f"SVC(kernel={self.kernel.__name__}, C={self.c}, d={self.d})"
+        return f"SVC(kernel={self.kernel_name}, C={self.C}, d={self.degree})"
 
 
 def load_dataset(path: str):
@@ -130,7 +129,7 @@ def make_cross_val(x, y):
         "clf__kernel": [linear_kernel],
     }
 
-    est = Pipeline([("scl", StandardScaler()), ("clf", SVC())])
+    est = Pipeline([("scl", StandardScaler()), ("clf", SVM())])
 
     cv = GridSearchCV(
         estimator=est, param_grid=params, n_jobs=-1, cv=5, error_score="raise"
