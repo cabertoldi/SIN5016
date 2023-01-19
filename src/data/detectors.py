@@ -1,18 +1,14 @@
-from typing import List, Dict
 import json
+from typing import Dict, List
 
 import cv2
 import numpy as np
 import pandas as pd
-
+from loguru import logger
 from PIL import Image
-from loguru import logger
-
-from dagster import asset, AssetIn
-
 from tqdm import tqdm
-from loguru import logger
 
+from dagster import AssetIn, asset
 
 HAAR_CASCADES_PATH = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
 DETECTED_FACES_JSON = "data/interim/detected_faces.json"

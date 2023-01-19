@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 """ Downloads the LFW dataset and pairs text files """
-from typing import Tuple, List
-import requests as req
 import tarfile
-from loguru import logger
-from dagster import op
+from typing import List, Tuple
 
+import requests as req
+from loguru import logger
+
+from dagster import op
 
 RAW_DATA_PATH = "data/raw"
 INTERIM_DATA_PATH = "data/interim"
