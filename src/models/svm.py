@@ -13,6 +13,8 @@ from sklearn.model_selection import GridSearchCV, train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
+cvxopt_solvers.options["show_progress"] = False
+
 
 class InvalidTargetException(Exception):
     """Exception para codificação inválida"""
