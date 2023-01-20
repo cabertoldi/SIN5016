@@ -8,10 +8,11 @@ from cvxopt import matrix as cvxopt_matrix
 from cvxopt import solvers as cvxopt_solvers
 from loguru import logger
 from sklearn.base import BaseEstimator
-from sklearn.metrics import classification_report
+from sklearn.metrics import classification_report, confusion_matrix
 from sklearn.model_selection import GridSearchCV, train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
+from sklearn.datasets import make_classification
 
 
 class InvalidTargetException(Exception):
@@ -20,23 +21,12 @@ class InvalidTargetException(Exception):
     pass
 
 
-def linear_kernel(x: np.array, y: np.array):
-    x_dash = y * x
-    return x_dash @ x_dash.T
+def linear_kernel(x1, x2):
+    return np.dot(x1, x2)
 
 
-def polinomial_kernel(x, y, d):
-    m, _ = x.shape
-
-    k = np.zeros((m, m))
-    h = np.zeros((m, m))
-
-    for i in range(m):
-        for j in range(m):
-            k[i, j] = ((x[i, :] @ x[j, :].T) + 1) ** d
-            h[i, j] = k[i, j] * y[i] * y[j]
-
-    return h
+def polynomial_kernel(x, y, d=3):
+    return (1 + np.dot(x, y)) ** d
 
 
 # noinspection PyMethodOverriding
@@ -54,6 +44,7 @@ class SVM(BaseEstimator):
         self.support_vectors_y = None
         self.bias = None
         self.w = None
+        self.lagrange_multipliers = None
 
     @staticmethod
     def validate_target(y: np.array):
@@ -62,27 +53,45 @@ class SVM(BaseEstimator):
         return all(u in {1, -1} for u in unique_values)
 
     def solve_qp(self, k: np.array, x: np.array, y: np.array):
-        m, _ = x.shape
+        n_samples, _ = x.shape
 
-        p = cvxopt_matrix(k)
-        q = cvxopt_matrix(-np.ones((m, 1)))
-        g = cvxopt_matrix(np.vstack((np.eye(m) * -1, np.eye(m))))
-        h = cvxopt_matrix(np.hstack((np.zeros(m), np.ones(m) * self.C)))
-        a = cvxopt_matrix(y.reshape(1, -1))
-        b = cvxopt_matrix(np.zeros(1))
+        p = cvxopt_matrix(np.outer(y, y) * k)
+        q = cvxopt_matrix(-np.ones(n_samples))
+        g = cvxopt_matrix(np.vstack((-np.eye(n_samples), np.eye(n_samples))))
+        h = cvxopt_matrix(np.hstack((np.zeros(n_samples), np.ones(n_samples) * self.C)))
+        a = cvxopt_matrix(y, (1, n_samples), "d")
+        b = cvxopt_matrix(0.0)
 
         solution = cvxopt_solvers.qp(p, q, g, h, a, b)
-        lagrange_multipliers = np.array(solution["x"])
+        alphas = np.array(solution["x"])
 
-        support_idx = (lagrange_multipliers > 1e-4).flatten()
+        support_idx = (alphas > 1e-4).flatten()
 
+        ind = np.arange(len(alphas))[
+            support_idx
+        ]  # lista com indices dos vetores suporte
+
+        self.lagrange_multipliers = alphas[support_idx]
         self.support_vectors = x[support_idx]
         self.support_vectors_y = y[support_idx]
 
-        w = ((y * lagrange_multipliers).T @ x).reshape(-1, 1)
-        b = self.support_vectors_y - np.dot(self.support_vectors, w)
+        logger.info("calculating bias")
+        self.bias = self.support_vectors_y - np.sum(
+            self.lagrange_multipliers.ravel()
+            * self.support_vectors_y
+            * k[ind, support_idx]
+        )
+        self.bias /= len(self.lagrange_multipliers)
+        self.bias = self.bias[0]
 
-        return w, b
+        logger.info("calculating w")
+        self.w = (
+            self.lagrange_multipliers.ravel()
+            * self.support_vectors_y
+            @ self.support_vectors
+        )
+
+        return self.w, b
 
     def fit(self, x, y):
         logger.info(
@@ -92,22 +101,29 @@ class SVM(BaseEstimator):
         if not self.validate_target(y):
             raise InvalidTargetException("Targets devem estar codificados como -1 e 1")
 
-        if self.kernel_name == "polinomial_kernel":
+        if self.kernel_name == "polynomial_kernel":
             self.kernel = partial(self.kernel, d=self.degree)
 
-        y = y.reshape(-1, 1).astype(np.float64)
-        k = self.kernel(x, y)
-        w, b = self.solve_qp(k, x, y)
+        n_samples, n_features = x.shape
 
-        self.w = w
-        self.bias = b[0] if len(b) else [0]
+        # Gram matrix
+        k = self.kernel(x, x.T)
+        w, b = self.solve_qp(k, x, y)
 
         return self
 
     def predict(self, x):
         if self.kernel_name == "linear_kernel":
             return np.sign(x @ self.w + self.bias)
-        ...
+
+        y_pred = np.sum(
+            self.lagrange_multipliers.ravel()
+            * self.support_vectors_y
+            * self.kernel(x, self.support_vectors.T),
+            axis=1,
+        )
+
+        return np.sign(y_pred + self.bias)
 
     def score(self, x: np.array, y: np.array) -> float:
         y_pred = self.predict(x)
@@ -130,6 +146,21 @@ def load_lbp():
 
 def load_hog():
     return load_dataset("data/preprocessed/feature_matrix_hog.parquet")
+
+
+def test():
+    x, y = make_classification(n_samples=100, n_features=2, n_redundant=0)
+    y = 2 * y - 1
+
+    x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2)
+
+    clf = SVM(C=10, kernel=polynomial_kernel, degree=3)
+    clf.fit(x_train, y_train)
+
+    y_pred = clf.predict(x_test)
+
+    print(confusion_matrix(y_test.astype(np.int64), y_pred.astype(np.int64)))
+    print(classification_report(y_test.astype(np.int64), y_pred.astype(np.int64)))
 
 
 def make_cross_val(x, y):
@@ -183,4 +214,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    test()
