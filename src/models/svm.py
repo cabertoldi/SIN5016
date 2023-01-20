@@ -45,11 +45,15 @@ class SVM(BaseEstimator):
         self, C: float = 10, kernel: Callable = linear_kernel, degree: int = None
     ):
         self.C = C
-        self.w = 0
-        self.b = 0
         self.degree = degree
         self.kernel = kernel
         self.kernel_name = kernel.__name__
+
+        # parametros do modelo
+        self.support_vectors = None
+        self.support_vectors_y = None
+        self.bias = None
+        self.w = None
 
     @staticmethod
     def validate_target(y: np.array):
@@ -67,12 +71,16 @@ class SVM(BaseEstimator):
         a = cvxopt_matrix(y.reshape(1, -1))
         b = cvxopt_matrix(np.zeros(1))
 
-        sol = cvxopt_solvers.qp(p, q, g, h, a, b)
-        alphas = np.array(sol["x"])
+        solution = cvxopt_solvers.qp(p, q, g, h, a, b)
+        lagrange_multipliers = np.array(solution["x"])
 
-        w = ((y * alphas).T @ x).reshape(-1, 1)
-        s = (alphas > 1e-3).flatten()
-        b = y[s] - np.dot(x[s], w)
+        support_idx = (lagrange_multipliers > 1e-4).flatten()
+
+        self.support_vectors = x[support_idx]
+        self.support_vectors_y = y[support_idx]
+
+        w = ((y * lagrange_multipliers).T @ x).reshape(-1, 1)
+        b = self.support_vectors_y - np.dot(self.support_vectors, w)
 
         return w, b
 
@@ -84,7 +92,7 @@ class SVM(BaseEstimator):
         if not self.validate_target(y):
             raise InvalidTargetException("Targets devem estar codificados como -1 e 1")
 
-        if self.kernel.__name__ == "polinomial_kernel":
+        if self.kernel_name == "polinomial_kernel":
             self.kernel = partial(self.kernel, d=self.degree)
 
         y = y.reshape(-1, 1).astype(np.float64)
@@ -92,12 +100,14 @@ class SVM(BaseEstimator):
         w, b = self.solve_qp(k, x, y)
 
         self.w = w
-        self.b = b[0] if len(b) else [0]
+        self.bias = b[0] if len(b) else [0]
 
         return self
 
     def predict(self, x):
-        return np.sign(x @ self.w + self.b)
+        if self.kernel_name == "linear_kernel":
+            return np.sign(x @ self.w + self.bias)
+        ...
 
     def score(self, x: np.array, y: np.array) -> float:
         y_pred = self.predict(x)
@@ -124,8 +134,8 @@ def load_hog():
 
 def make_cross_val(x, y):
     params = {
-        "clf__c": [1, 10, 100, 1000],
-        "clf__d": [2, 3, 4],
+        "clf__C": [1, 10, 100, 1000],
+        "clf__degree": [2, 3, 4],
         "clf__kernel": [linear_kernel],
     }
 
