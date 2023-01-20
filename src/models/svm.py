@@ -63,9 +63,9 @@ class SVM(BaseEstimator):
         b = cvxopt_matrix(0.0)
 
         solution = cvxopt_solvers.qp(p, q, g, h, a, b)
-        alphas = np.array(solution["x"])
+        alphas = np.ravel(solution["x"])
 
-        support_idx = (alphas > 1e-4).flatten()
+        support_idx = alphas > 1e-4
 
         ind = np.arange(len(alphas))[
             support_idx
@@ -76,22 +76,24 @@ class SVM(BaseEstimator):
         self.support_vectors_y = y[support_idx]
 
         logger.info("calculating bias")
-        self.bias = self.support_vectors_y - np.sum(
-            self.lagrange_multipliers.ravel()
-            * self.support_vectors_y
-            * k[ind, support_idx]
-        )
-        self.bias /= len(self.lagrange_multipliers)
-        self.bias = self.bias[0]
 
         logger.info("calculating w")
         self.w = (
-            self.lagrange_multipliers.ravel()
-            * self.support_vectors_y
-            @ self.support_vectors
+            self.lagrange_multipliers * self.support_vectors_y @ self.support_vectors
         )
+        self.bias = np.median(self.support_vectors_y - (self.support_vectors @ self.w))
 
-        return self.w, b
+        if self.kernel_name == "polynomial_kernel":
+            self.bias = np.mean(
+                self.support_vectors_y
+                - sum(
+                    self.lagrange_multipliers
+                    * self.support_vectors_y
+                    * self.kernel(self.support_vectors, self.support_vectors.T)
+                )
+            )
+
+        return self.w, self.bias
 
     def fit(self, x, y):
         logger.info(
@@ -108,16 +110,17 @@ class SVM(BaseEstimator):
 
         # Gram matrix
         k = self.kernel(x, x.T)
-        w, b = self.solve_qp(k, x, y)
+        self.solve_qp(k, x, y)
 
         return self
 
     def predict(self, x):
+
         if self.kernel_name == "linear_kernel":
             return np.sign(x @ self.w + self.bias)
 
         y_pred = np.sum(
-            self.lagrange_multipliers.ravel()
+            self.lagrange_multipliers
             * self.support_vectors_y
             * self.kernel(x, self.support_vectors.T),
             axis=1,
