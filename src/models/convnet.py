@@ -47,9 +47,7 @@ class ConvNet(nn.Module):
         x2 = torch.flatten(x2, start_dim=1)
         x = torch.multiply(x1, x2)
 
-        # passamos o vetor para a camada densa
-        y = self.sig(self.dense(x))
-        return y
+        return self.sig(self.dense(x))
 
     def predict(self, x1, x2):
         with torch.no_grad():

@@ -40,7 +40,7 @@ def hog_extractor():
     logger.info("Running hog extractor")
     images_paths: List[str] = get_images_paths()
 
-    histograms = list()
+    histograms = []
     for path in tqdm(images_paths):
         # load image
         img = np.asarray(Image.open(path).resize(RESIZED_IMAGE))
@@ -80,7 +80,7 @@ def lbp_extractor():
     logger.info("Running LBP extractor")
     images_paths = get_images_paths()
 
-    histograms = list()
+    histograms = []
     for path in tqdm(images_paths):
         # load image
         img = np.asarray(Image.open(path).resize(RESIZED_IMAGE))
