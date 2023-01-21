@@ -20,92 +20,127 @@ class InvalidTargetException(Exception):
     pass
 
 
-def linear_kernel(x: np.array, y: np.array):
-    x_dash = y * x
-    return x_dash @ x_dash.T
+def linear_kernel(x1, x2):
+    return np.dot(x1, x2)
 
 
-def polinomial_kernel(x, y, d):
-    m, _ = x.shape
-
-    k = np.zeros((m, m))
-    h = np.zeros((m, m))
-
-    for i in range(m):
-        for j in range(m):
-            k[i, j] = ((x[i, :] @ x[j, :].T) + 1) ** d
-            h[i, j] = k[i, j] * y[i] * y[j]
-
-    return h
+def polynomial_kernel(x, y, d=3):
+    return (1 + np.dot(x, y)) ** d
 
 
 # noinspection PyMethodOverriding
-class SVC(BaseEstimator):
-    def __init__(self, c: float = 10, kernel: Callable = linear_kernel, d: int = None):
-        self.c = c
-        self.w = 0
-        self.b = 0
-        self.d = d
+class SVM(BaseEstimator):
+    def __init__(self, C: int = None, kernel: str = None, degree: int = None):
+        self.C = C
+        self.degree = degree
         self.kernel = kernel
+        self.kernel_func = None
+
+        # parâmetros do modelo
+        self.support_vectors = None
+        self.support_vectors_y = None
+        self.bias = None
+        self.w = None
+        self.lagrange_multipliers = None
 
     @staticmethod
     def validate_target(y: np.array):
         """Variável alvo deve ser binária, codificada como 1 e -1"""
         unique_values = set(np.unique(y.astype(int)))
-        return all(u in {1, -1} for u in unique_values)
-
-    def solve_qp(self, k: np.array, x: np.array, y: np.array):
-        m, _ = x.shape
-
-        p = cvxopt_matrix(k)
-        q = cvxopt_matrix(-np.ones((m, 1)))
-        g = cvxopt_matrix(np.vstack((np.eye(m) * -1, np.eye(m))))
-        h = cvxopt_matrix(np.hstack((np.zeros(m), np.ones(m) * self.c)))
-        a = cvxopt_matrix(y.reshape(1, -1))
-        b = cvxopt_matrix(np.zeros(1))
-
-        sol = cvxopt_solvers.qp(p, q, g, h, a, b)
-        alphas = np.array(sol["x"])
-
-        w = ((y * alphas).T @ x).reshape(-1, 1)
-        s = (alphas > 1e-3).flatten()
-        b = y[s] - np.dot(x[s], w)
-
-        return w, b
-
-    def fit(self, x, y):
-        logger.info(
-            f"Fitting SVC with params: C = {self.c}, kernel = {self.kernel.__name__}, d = {self.d}"
+        if all(u in {1, -1} for u in unique_values):
+            return True
+        raise InvalidTargetException(
+            "Variável alvo deve ser binária, codificada como 1 e -1"
         )
 
-        if not self.validate_target(y):
-            raise InvalidTargetException("Targets devem estar codificados como -1 e 1")
+    def solve_qp(self, x: np.array, y: np.array):
+        n_samples, _ = x.shape
 
-        if self.kernel.__name__ == "polinomial_kernel":
-            self.kernel = partial(self.kernel, d=self.d)
+        k = self.kernel_func(x, x.T)
+        p = cvxopt_matrix(np.outer(y, y) * k)
+        q = cvxopt_matrix(-np.ones(n_samples))
+        g = cvxopt_matrix(np.vstack((-np.eye(n_samples), np.eye(n_samples))))
+        h = cvxopt_matrix(np.hstack((np.zeros(n_samples), np.ones(n_samples) * self.C)))
+        a = cvxopt_matrix(y, (1, n_samples), "d")
+        b = cvxopt_matrix(0.0)
 
-        y = y.reshape(-1, 1).astype(np.float64)
-        k = self.kernel(x, y)
-        w, b = self.solve_qp(k, x, y)
+        cvxopt_solvers.options["show_progress"] = False
+        solution = cvxopt_solvers.qp(p, q, g, h, a, b)
+        alphas = np.ravel(solution["x"])
 
-        self.w = w
-        self.b = b[0] if len(b) else [0]
+        support_idx = alphas > 1e-4
+
+        lagrange_multipliers = alphas[support_idx]
+        support_vectors = x[support_idx]
+        support_vectors_y = y[support_idx]
+
+        return lagrange_multipliers, support_vectors, support_vectors_y
+
+    def estimate_bias(self):
+        if self.kernel == "linear":
+            return np.median(self.support_vectors_y - (self.support_vectors @ self.w))
+
+        return np.mean(
+            self.support_vectors_y
+            - sum(
+                self.lagrange_multipliers
+                * self.support_vectors_y
+                * self.kernel_func(self.support_vectors, self.support_vectors.T)
+            )
+        )
+
+    def estimate_coefficients(self):
+        """Calcula os coeficientes para o caso do kernel linear"""
+        return self.lagrange_multipliers * self.support_vectors_y @ self.support_vectors
+
+    def setup_kernel(self):
+        """Realiza operações de configuração específicas para cada kernel"""
+        if self.kernel == "linear":
+            self.kernel_func = linear_kernel
+        elif self.kernel == "poly":
+            self.kernel_func = polynomial_kernel
+            self.kernel_func = partial(self.kernel_func, d=self.degree)
+
+    def fit(self, x, y):
+        """Ajusta os parâmetros do modelo"""
+        logger.info(f"Fitting model {self}")
+        self.setup_kernel()
+
+        SVM.validate_target(y)
+
+        (
+            self.lagrange_multipliers,
+            self.support_vectors,
+            self.support_vectors_y,
+        ) = self.solve_qp(x, y)
+
+        self.w = self.estimate_coefficients()
+        self.bias = self.estimate_bias()
 
         return self
 
     def predict(self, x):
-        return SVC.signal(x @ self.w + self.b)
+        """Recebe novos dados de entrada e retorna as predições {1, -1}"""
+
+        if self.kernel == "linear":
+            return np.sign(x @ self.w + self.bias)
+
+        y_pred = np.sum(
+            self.lagrange_multipliers
+            * self.support_vectors_y
+            * self.kernel_func(x, self.support_vectors.T),
+            axis=1,
+        )
+
+        return np.sign(y_pred + self.bias)
 
     def score(self, x: np.array, y: np.array) -> float:
+        """Recebe um conjunto de dados x e a variável y e retorna a acurácia do modelo neste conjunto"""
         y_pred = self.predict(x)
         return np.sum(y == y_pred) / len(y)
 
-    @staticmethod
-    def signal(y: np.array):
-        return np.where(y >= 0, 1, -1).flatten()
-
     def __repr__(self):
-        return f"SVC(kernel={self.kernel.__name__}, C={self.c}, d={self.d})"
+        return f"SVC(kernel={self.kernel}, C={self.C}, d={self.degree})"
 
 
 def load_dataset(path: str):
@@ -125,12 +160,12 @@ def load_hog():
 
 def make_cross_val(x, y):
     params = {
-        "clf__c": [1, 10, 100, 1000],
-        "clf__d": [2, 3, 4],
-        "clf__kernel": [linear_kernel],
+        "clf__C": [10, 100, 1000],
+        "clf__degree": [2, 3],
+        "clf__kernel": ["poly", "linear"],
     }
 
-    est = Pipeline([("scl", StandardScaler()), ("clf", SVC())])
+    est = Pipeline([("scl", StandardScaler()), ("clf", SVM())])
 
     cv = GridSearchCV(
         estimator=est, param_grid=params, n_jobs=-1, cv=5, error_score="raise"
@@ -145,7 +180,9 @@ def save_model_results(
     classification_report_text: str,
     results: Dict,
     model: BaseEstimator,
+    preds_df: pd.DataFrame,
 ):
+    """Salva resultados dos experimentos"""
     with open(f"execucao/{dataset_name}-classification_report.txt", "w") as f:
         f.write(classification_report_text)
 
@@ -155,22 +192,32 @@ def save_model_results(
     with open(f"execucao/{dataset_name}-model.pkl", "wb") as f:
         pickle.dump(model, f)
 
+    preds_df.to_csv(f"execucao/{dataset_name}-preds.csv", index=False)
+
 
 def main():
-    datasets = [("LBP", load_lbp), ("HOG", load_lbp)]
+    """Executa toda pipeline de treinamento para todos os conjuntos de dados"""
+    datasets = [
+        ("LBP", load_lbp),
+        ("HOG", load_hog),
+    ]
 
     for dataset_name, loader in datasets:
+        logger.warning(f"Running experiment for: {dataset_name}")
         x, y = loader()
 
         x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.3)
 
         best_model, results = make_cross_val(x_train, y_train)
+        best_model.fit(x_train, y_train)
 
         y_pred = best_model.predict(x_test)
 
         class_report = classification_report(y_test, y_pred)
+        preds_df = pd.DataFrame({"y_test": y_test, "y_pred": y_pred})
 
-        save_model_results(dataset_name, class_report, results, best_model)
+        save_model_results(dataset_name, class_report, results, best_model, preds_df)
+        logger.warning(f"Finished experiment for: {dataset_name}")
 
 
 if __name__ == "__main__":

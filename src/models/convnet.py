@@ -15,17 +15,17 @@ class ConvNet(nn.Module):
         self.dense_dropout = dense_dropout
 
         self.conv_im1 = nn.Sequential(
-            nn.Conv2d(in_channels=3, out_channels=20, kernel_size=3),
-            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Conv2d(in_channels=3, out_channels=20, kernel_size=3),  # 20x108x108
+            nn.MaxPool2d(kernel_size=2, stride=2),  # 20x54x54
             nn.Dropout2d(self.conv_dropout),
-            nn.Conv2d(in_channels=20, out_channels=60, kernel_size=3),
-            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Conv2d(in_channels=20, out_channels=60, kernel_size=3),  # 60x52x52
+            nn.MaxPool2d(kernel_size=2, stride=2),  # 60x26x26
             nn.Dropout2d(self.conv_dropout),
-            nn.Conv2d(in_channels=60, out_channels=120, kernel_size=3),
-            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Conv2d(in_channels=60, out_channels=120, kernel_size=3),  # 120x24x24
+            nn.MaxPool2d(kernel_size=2, stride=2),  # 120x12x12
             nn.Dropout2d(self.conv_dropout),
-            nn.Conv2d(in_channels=120, out_channels=240, kernel_size=3),
-            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Conv2d(in_channels=120, out_channels=240, kernel_size=3),  # 240x10x10
+            nn.MaxPool2d(kernel_size=2, stride=2),  # 240x5x5
             nn.Dropout2d(self.conv_dropout),
         )
 
@@ -47,9 +47,7 @@ class ConvNet(nn.Module):
         x2 = torch.flatten(x2, start_dim=1)
         x = torch.multiply(x1, x2)
 
-        # passamos o vetor para a camada densa
-        y = self.sig(self.dense(x))
-        return y
+        return self.sig(self.dense(x))
 
     def predict(self, x1, x2):
         with torch.no_grad():
