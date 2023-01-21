@@ -105,17 +105,19 @@ class LFWDataset(Dataset):
 
     def free(self):
         for im1, im2, target in self.data:
-            im1.to("cpu")
-            im2.to("cpu")
-            target.to("cpu")
-
-            del im1
-            del im2
-            del target
-
+            self.free_elements(im1, im2, target)
         self.data = []
         torch.cuda.empty_cache()
         gc.collect()
+
+    def free_elements(self, im1, im2, target):
+        im1.to("cpu")
+        im2.to("cpu")
+        target.to("cpu")
+
+        del im1
+        del im2
+        del target
 
 
 LFW_DATASET = LFWDataset(
