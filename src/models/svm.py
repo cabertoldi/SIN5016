@@ -13,8 +13,6 @@ from sklearn.model_selection import GridSearchCV, train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-cvxopt_solvers.options["show_progress"] = False
-
 
 class InvalidTargetException(Exception):
     """Exception para codificação inválida"""
@@ -32,13 +30,11 @@ def polynomial_kernel(x, y, d=3):
 
 # noinspection PyMethodOverriding
 class SVM(BaseEstimator):
-    def __init__(
-        self, C: int = 10, kernel: Callable = linear_kernel, degree: int = None
-    ):
+    def __init__(self, C: int = None, kernel: str = None, degree: int = None):
         self.C = C
         self.degree = degree
         self.kernel = kernel
-        self.kernel_name = kernel.__name__
+        self.kernel_func = None
 
         # parâmetros do modelo
         self.support_vectors = None
@@ -60,7 +56,7 @@ class SVM(BaseEstimator):
     def solve_qp(self, x: np.array, y: np.array):
         n_samples, _ = x.shape
 
-        k = self.kernel(x, x.T)
+        k = self.kernel_func(x, x.T)
         p = cvxopt_matrix(np.outer(y, y) * k)
         q = cvxopt_matrix(-np.ones(n_samples))
         g = cvxopt_matrix(np.vstack((-np.eye(n_samples), np.eye(n_samples))))
@@ -68,6 +64,7 @@ class SVM(BaseEstimator):
         a = cvxopt_matrix(y, (1, n_samples), "d")
         b = cvxopt_matrix(0.0)
 
+        cvxopt_solvers.options["show_progress"] = False
         solution = cvxopt_solvers.qp(p, q, g, h, a, b)
         alphas = np.ravel(solution["x"])
 
@@ -80,19 +77,17 @@ class SVM(BaseEstimator):
         return lagrange_multipliers, support_vectors, support_vectors_y
 
     def estimate_bias(self):
-        """Calcula o bias"""
-        if self.kernel_name == "polynomial_kernel":
-            bias = np.mean(
-                self.support_vectors_y
-                - sum(
-                    self.lagrange_multipliers
-                    * self.support_vectors_y
-                    * self.kernel(self.support_vectors, self.support_vectors.T)
-                )
+        if self.kernel == "linear":
+            return np.median(self.support_vectors_y - (self.support_vectors @ self.w))
+
+        return np.mean(
+            self.support_vectors_y
+            - sum(
+                self.lagrange_multipliers
+                * self.support_vectors_y
+                * self.kernel_func(self.support_vectors, self.support_vectors.T)
             )
-        elif self.kernel_name == "linear_kernel":
-            bias = np.median(self.support_vectors_y - (self.support_vectors @ self.w))
-        return bias
+        )
 
     def estimate_coefficients(self):
         """Calcula os coeficientes para o caso do kernel linear"""
@@ -100,8 +95,11 @@ class SVM(BaseEstimator):
 
     def setup_kernel(self):
         """Realiza operações de configuração específicas para cada kernel"""
-        if self.kernel_name == "polynomial_kernel":
-            self.kernel = partial(self.kernel, d=self.degree)
+        if self.kernel == "linear":
+            self.kernel_func = linear_kernel
+        elif self.kernel == "poly":
+            self.kernel_func = polynomial_kernel
+            self.kernel_func = partial(self.kernel_func, d=self.degree)
 
     def fit(self, x, y):
         """Ajusta os parâmetros do modelo"""
@@ -124,13 +122,13 @@ class SVM(BaseEstimator):
     def predict(self, x):
         """Recebe novos dados de entrada e retorna as predições {1, -1}"""
 
-        if self.kernel_name == "linear_kernel":
+        if self.kernel == "linear":
             return np.sign(x @ self.w + self.bias)
 
         y_pred = np.sum(
             self.lagrange_multipliers
             * self.support_vectors_y
-            * self.kernel(x, self.support_vectors.T),
+            * self.kernel_func(x, self.support_vectors.T),
             axis=1,
         )
 
@@ -142,7 +140,7 @@ class SVM(BaseEstimator):
         return np.sum(y == y_pred) / len(y)
 
     def __repr__(self):
-        return f"SVC(kernel={self.kernel_name}, C={self.C}, d={self.degree})"
+        return f"SVC(kernel={self.kernel}, C={self.C}, d={self.degree})"
 
 
 def load_dataset(path: str):
@@ -163,8 +161,8 @@ def load_hog():
 def make_cross_val(x, y):
     params = {
         "clf__C": [10, 100, 1000],
-        "clf__degree": [2, 3, 4],
-        "clf__kernel": [linear_kernel, polynomial_kernel],
+        "clf__degree": [2, 3],
+        "clf__kernel": ["poly", "linear"],
     }
 
     est = Pipeline([("scl", StandardScaler()), ("clf", SVM())])
@@ -199,14 +197,19 @@ def save_model_results(
 
 def main():
     """Executa toda pipeline de treinamento para todos os conjuntos de dados"""
-    datasets = [("LBP", load_lbp), ("HOG", load_lbp)]
+    datasets = [
+        ("LBP", load_lbp),
+        ("HOG", load_hog),
+    ]
 
     for dataset_name, loader in datasets:
+        logger.warning(f"Running experiment for: {dataset_name}")
         x, y = loader()
 
         x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.3)
 
         best_model, results = make_cross_val(x_train, y_train)
+        best_model.fit(x_train, y_train)
 
         y_pred = best_model.predict(x_test)
 
@@ -214,6 +217,7 @@ def main():
         preds_df = pd.DataFrame({"y_test": y_test, "y_pred": y_pred})
 
         save_model_results(dataset_name, class_report, results, best_model, preds_df)
+        logger.warning(f"Finished experiment for: {dataset_name}")
 
 
 if __name__ == "__main__":
